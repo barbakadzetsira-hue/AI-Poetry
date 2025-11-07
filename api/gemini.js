@@ -4,7 +4,7 @@ export default async function handler(request, response) {
   // 1. ვამოწმებთ, რომ მოთხოვნა მოდის სწორი მეთოდით (POST)
   if (request.method !== 'POST') {
     // 405 ნიშნავს "აკრძალული მეთოდი"
-    return response.status(405).json({ message: 'Csak POST kerelmek engedelyezettek' }); // უბრალოდ შეტყობინება
+    return response.status(405).json({ message: 'Only POST requests are allowed' });
   }
 
   // 2. ვიღებთ პრომპტს, რასაც მომხმარებელი წერს საიტზე
@@ -12,7 +12,7 @@ export default async function handler(request, response) {
 
   if (!prompt) {
     // 400 ნიშნავს "ცუდი მოთხოვნა"
-    return response.status(400).json({ message: 'Promt szukseges' }); // პრომპტი აუცილებელია
+    return response.status(400).json({ message: 'Prompt is required' });
   }
 
   // 3. ვიღებთ ჩვენს საიდუმლო გასაღებს Vercel-ის "სეიფიდან"
@@ -52,7 +52,7 @@ export default async function handler(request, response) {
     if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
       console.error('Gemini API Error or empty response:', data);
       // 500 ნიშნავს "სერვერის შიდა შეცდომა"
-      return response.status(500).json({ message: 'Nem kaptam ertelmes valaszt a Geminitol', details: data });
+      return response.status(500).json({ message: 'Did not receive a valid response from Gemini', details: data });
     }
     
     // ვიღებთ გენერირებულ ტექსტს
@@ -64,7 +64,7 @@ export default async function handler(request, response) {
 
   } catch (error) {
     // ეს კოდი იმუშავებს, თუ ინტერნეტი გაითიშა ან სერვერი მიუწვდომელია
-    console.error('Szerver oldali hiba:', error);
-    return response.status(500).json({ message: 'Nem sikerult a Gemini elerese' });
+    console.error('Server-side error:', error);
+    return response.status(500).json({ message: 'Failed to reach Gemini API' });
   }
 }
