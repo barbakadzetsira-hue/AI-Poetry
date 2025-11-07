@@ -1,52 +1,88 @@
-netlify/functions/generate-poem.js
-const fetch = require('node-fetch');
+// --- AI-Poetry - განახლებული Front-End კოდი ---
 
-exports.handler = async (event) => {
-  const { theme, style = 'თავისუფალი', lines = '8', language = 'ქართული' } = JSON.parse(event.body);
+// 1. ველოდებით HTML დოკუმენტის სრულად ჩატვირთვას
+document.addEventListener('DOMContentLoaded', () => {
+  
+  // 2. ვპოულობთ ჩვენს HTML ელემენტებს
+  // !!! ყურადღება: 'poem-form', 'poem-output' და 'loader' 
+  // უნდა ემთხვეოდეს შენი index.html ფაილის ID-ებს
+  const poemForm = document.getElementById('poem-form');
+  const poemOutput = document.getElementById('poem-output');
+  const loader = document.getElementById('loader');
 
-  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-
-  if (!ANTHROPIC_API_KEY) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'API key missing on server' })
-    };
+  // თუ რომელიმე ელემენტს ვერ პოულობს, ვაჩვენებთ შეცდომას კონსოლში
+  if (!poemForm) {
+    console.error('შეცდომა: HTML-ში ვერ ვიპოვე ელემენტი ID-ით "poem-form"');
+    return;
+  }
+  if (!poemOutput) {
+    console.error('შეცდომა: HTML-ში ვერ ვიპოვე ელემენტი ID-ით "poem-output"');
+    return;
+  }
+  if (!loader) {
+    console.error('შენიშვნა: HTML-ში ვერ ვიპოვე ელემენტი ID-ით "loader". ლოდინის ინდიკატორი არ იმუშავებს.');
   }
 
-  const prompt = `შექმენი ლექსი ქართულად თემაზე: "${theme}". სტილი: ${style}. სტრიქონები: ${lines}.`;
+  // 3. ვამატებთ მოვლენას "submit" ღილაკზე (ან ფორმაზე)
+  poemForm.addEventListener('submit', async (event) => {
+    event.preventDefault(); // ვაჩერებთ გვერდის გადატვირთვას
 
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 300,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-
-    const data = await response.json();
-
-    if (data.content && data.content[0].text) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ poem: data.content[0].text })
-      };
+    // ვიღებთ ტექსტს ფორმიდან. 
+    // !!! დაუშვათ, რომ შენს input ველს აქვს name="prompt" ან id="prompt"
+    // ვცადოთ ორივე ვარიანტი, რომ ვიპოვოთ
+    let userPrompt;
+    const promptInput = document.getElementById('prompt') || document.getElementsByName('prompt')[0];
+    
+    if (promptInput) {
+      userPrompt = promptInput.value;
     } else {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: 'No poem generated', raw: data })
-      };
+        // თუ ვერ ვიპოვეთ, ავიღოთ ფორმის ყველა მონაცემი
+        const formData = new FormData(poemForm);
+        userPrompt = formData.get('prompt'); // ეს იმუშავებს, თუ ველს აქვს name="prompt"
     }
-  } catch (error) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message })
-    };
-  }
-};
+
+    if (!userPrompt) {
+      poemOutput.textContent = 'გთხოვთ, შეიყვანოთ ლექსის თემა.';
+      return;
+    }
+
+    // 4. ვიწყებთ პროცესს: ვასუფთავებთ ძველ პასუხს და ვაჩვენებთ "მბრუნავ" ლოუდერს
+    poemOutput.textContent = '';
+    if (loader) loader.style.display = 'block';
+
+    try {
+      // 5. !!! მთავარი ცვლილება !!!
+      // ჩვენ აღარ ვუკავშირდებით OpenAI-ს.
+      // ჩვენ ვუკავშირდებით ჩვენს "შავ ყუთს" (api/gemini.js), რომელიც Vercel-ზე შევქმენით.
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: userPrompt // ჩვენს "შავ ყუთს" ვუგზავნით მხოლოდ პრომპტს
+        })
+      });
+
+      if (!response.ok) {
+        // თუ ჩვენი "შავი ყუთი" შეცდომას დააბრუნებს, ვაჩვენებთ მას
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'სერვერმა დააბრუნა შეცდომა');
+      }
+
+      const data = await response.json();
+
+      // 6. წარმატება! პასუხს (data.text) ვაჩვენებთ ეკრანზე
+      // ვიყენებთ innerText-ის ნაცვლად innerHTML-ს, რომ \n (ახალი ხაზი) გადავიდეს <br>-ად
+      poemOutput.innerHTML = data.text.replace(/\n/g, '<br>');
+
+    } catch (error) {
+      // 7. თუ რამე შეცდომა მოხდა, ვაჩვენებთ მას
+      console.error('წარმოიშვა შეცდომა:', error);
+      poemOutput.textContent = `სამწუხაროდ, მოხდა შეცდომა: ${error.message}`;
+    } finally {
+      // 8. პროცესის დასასრული: ვმალავთ "მბრუნავ" ლოუდერს
+      if (loader) loader.style.display = 'none';
+    }
+  });
+});
